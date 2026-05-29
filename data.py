@@ -17,6 +17,10 @@ def stack_language(language, access_token):
     ).select_columns(["content"]).map(content_to_text, remove_columns=["content"])
 
 
+def create_python_dataset(access_token):
+    return stack_language("python", access_token)
+
+
 def create_dataset(access_token):
     python_data = stack_language("python", access_token)
     typescript_data = stack_language("typescript", access_token)
