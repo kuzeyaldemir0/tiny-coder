@@ -97,6 +97,7 @@ class LLM(nn.Module):
 
         nn.init.normal_(self.tok_embedding.weight, std=0.02)
         # output_proj shares this weight — std=0.02 keeps initial logits small
+        nn.init.normal_(self.pos_embedding.weight, std=0.02)
 
         self.blocks = nn.ModuleList([
             TransformerBlock(embedding_dim, n_heads, n_kv_heads, intermediate_dim, dropout, is_causal)
