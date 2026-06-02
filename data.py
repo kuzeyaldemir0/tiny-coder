@@ -1,6 +1,6 @@
 import torch
 from datasets import load_dataset
-from torch.utils.data import IterableDataset
+from torch.utils.data import Dataset
 
 
 def create_python_dataset(data_file):
@@ -8,30 +8,31 @@ def create_python_dataset(data_file):
         "json",
         data_files=data_file,
         split="train",
-        streaming=True,
-    ).select_columns(["text"])
+    )["text"]
 
 
-class CoderDataset(IterableDataset):
+class CoderDataset(Dataset):
     def __init__(self, dataset, tokenizer, context_length):
-        self.dataset = dataset
-        self.tokenizer = tokenizer
+        all_tokens = []
+        
+        if tokenizer.eos_token_id is None:
+                raise ValueError("Tokenizer must define eos_token_id.")
+
+        for start in range(0, len(dataset), 100):
+            texts = dataset[start : start + 100]
+            encoded_batch = tokenizer(texts)["input_ids"]
+
+            for encoded in encoded_batch:
+                all_tokens.extend(encoded)
+                all_tokens.append(tokenizer.eos_token_id)
+
+        self.tokens = torch.tensor(all_tokens, dtype=torch.long) 
         self.context_length = context_length
-        self.eos_token_id = tokenizer.eos_token_id
 
-        if self.eos_token_id is None:
-            raise ValueError("Tokenizer must define eos_token_id.")
+    def __len__(self):
+        return (len(self.tokens) - 1) // self.context_length
 
-    def __iter__(self):
-        buffer = []
-
-        for example in self.dataset:
-            encoded = self.tokenizer.encode(example["text"])
-            encoded.append(self.eos_token_id)
-            buffer.extend(encoded)
-
-            while len(buffer) >= self.context_length + 1:
-                x = torch.tensor(buffer[0 : self.context_length], dtype=torch.long)
-                y = torch.tensor(buffer[1 : self.context_length + 1], dtype=torch.long)
-                buffer = buffer[self.context_length:]
-                yield x, y
+    def __getitem__(self, index):
+        start = index * self.context_length
+        chunk = self.tokens[start : start + self.context_length + 1]
+        return chunk[:-1], chunk[1:]
