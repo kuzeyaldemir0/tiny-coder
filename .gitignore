@@ -4,6 +4,11 @@
 .idea/
 .DS_Store
 __pycache__/
+**/__pycache__/
 /checkpoints
 *.pt
-/data/
+/data/*
+!/data/scripts/
+!/data/scripts/**
+/data/scripts/**/__pycache__/
+/lid.176.bin
