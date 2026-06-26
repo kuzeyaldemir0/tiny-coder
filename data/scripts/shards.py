@@ -7,7 +7,14 @@ import numpy as np
 
 
 class BinShardWriter:
-    def __init__(self, output_dir: Path, split: str, shard_tokens: int, dtype: str = "uint16") -> None:
+    def __init__(
+        self,
+        output_dir: Path,
+        split: str,
+        shard_tokens: int,
+        dtype: str = "uint16",
+        append: bool = False,
+    ) -> None:
         self.output_dir = output_dir
         self.split = split
         self.shard_tokens = shard_tokens
@@ -17,6 +24,20 @@ class BinShardWriter:
         self.shard_index = 0
         self.total_tokens = 0
         self.files: list[dict] = []
+        if append:
+            self._load_existing_shards()
+
+    def _load_existing_shards(self) -> None:
+        shards = sorted(self.output_dir.glob(f"{self.split}_*.bin"))
+        for path in shards:
+            tokens = path.stat().st_size // np.dtype(self.dtype).itemsize
+            self.files.append({"path": path.name, "tokens": tokens, "bytes": path.stat().st_size})
+            self.total_tokens += tokens
+            try:
+                index = int(path.stem.rsplit("_", 1)[1])
+            except (IndexError, ValueError):
+                continue
+            self.shard_index = max(self.shard_index, index + 1)
 
     def add(self, token_ids: list[int]) -> None:
         if self.dtype == "uint16" and token_ids and max(token_ids) > np.iinfo(np.uint16).max:

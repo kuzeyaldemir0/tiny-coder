@@ -135,6 +135,18 @@ def command_tokenizer_report(args: argparse.Namespace) -> None:
         print(f"\nwrote tokenizer report: {output}")
 
 
+def parse_source_counts(values: list[str] | None) -> Counter:
+    counts = Counter()
+    for value in values or []:
+        if "=" not in value:
+            raise SystemExit(f"expected source=count, got {value!r}")
+        source, raw_count = value.split("=", 1)
+        if source not in SOURCES:
+            raise SystemExit(f"unknown source in count override: {source}")
+        counts[source] = int(raw_count.replace("_", ""))
+    return counts
+
+
 def command_build(args: argparse.Namespace) -> None:
     tokenizer_path = Path(args.tokenizer)
     tokenizer = load_tokenizer(tokenizer_path)
@@ -163,14 +175,14 @@ def command_build(args: argparse.Namespace) -> None:
         SOURCE_WEB: args.web_max_docs,
         SOURCE_MATH: args.math_max_docs,
     }
-    source_tokens = Counter()
-    source_docs = Counter()
+    source_tokens = parse_source_counts(args.base_source_tokens)
+    source_docs = parse_source_counts(args.base_source_docs)
     source_stats = {}
     started_at = time.time()
     next_progress_tokens = {source: args.progress_every_tokens for source in SOURCES}
     writers = {
-        "train": BinShardWriter(output_dir, "train", args.shard_tokens),
-        "val": BinShardWriter(output_dir, "val", args.shard_tokens),
+        "train": BinShardWriter(output_dir, "train", args.shard_tokens, append=args.append),
+        "val": BinShardWriter(output_dir, "val", args.shard_tokens, append=args.append),
     }
 
     def write_progress(current_source: str | None = None) -> None:
@@ -194,6 +206,13 @@ def command_build(args: argparse.Namespace) -> None:
             )
 
     for source in source_order:
+        if target_tokens[source] and source_tokens[source] >= target_tokens[source]:
+            print(
+                f"skipping source={source}; base tokens already satisfy target "
+                f"{source_tokens[source]:,}/{target_tokens[source]:,}",
+                flush=True,
+            )
+            continue
         print(f"starting source={source} target_tokens={target_tokens[source]:,}", flush=True)
         stats = FilterStats(source=source)
         for rec in iter_clean_source(
@@ -362,6 +381,9 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--max-local-gb", type=float, default=40.0)
     build.add_argument("--progress-every-tokens", type=int, default=5_000_000)
     build.add_argument("--source-order", nargs="+", default=list(SOURCES))
+    build.add_argument("--append", action="store_true")
+    build.add_argument("--base-source-tokens", nargs="*", default=None)
+    build.add_argument("--base-source-docs", nargs="*", default=None)
     build.set_defaults(func=command_build)
 
     upload = subparsers.add_parser("upload", help="upload build artifacts to a Hugging Face dataset repo")
