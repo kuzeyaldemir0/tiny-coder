@@ -16,6 +16,7 @@ if str(SCRIPT_PARENT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_PARENT))
 
 from scripts.dedup import near_dedup_records
+import scripts.python_cleaning as python_cleaning
 from scripts.python_cleaning import clean_python_row, extract_identifier_text, parse_python3, strip_known_boilerplate
 from scripts.tokenizers import load_tokenizer, train_one_tokenizer
 
@@ -59,6 +60,25 @@ class PythonCleaningTests(unittest.TestCase):
         self.assertIn("calculator", identifiers)
         self.assertIn("grand", identifiers)
         self.assertIn("total", identifiers)
+
+    def test_recursive_identifier_extraction_drops_file(self) -> None:
+        original = python_cleaning.extract_identifier_text
+
+        def raise_recursion(_tree):
+            raise RecursionError("too deep")
+
+        try:
+            python_cleaning.extract_identifier_text = raise_recursion
+            row = {
+                "id": "deep",
+                "text": "# Useful English explanation for a valid file.\ndef useful_function_name():\n    return 1\n",
+            }
+            cleaned, reason, _ = clean_python_row(row, require_fasttext=False)
+        finally:
+            python_cleaning.extract_identifier_text = original
+
+        self.assertIsNone(cleaned)
+        self.assertEqual(reason, "language_signal_extract_failed")
 
     def test_exact_and_near_dedup_keep_quality_representative(self) -> None:
         low = {

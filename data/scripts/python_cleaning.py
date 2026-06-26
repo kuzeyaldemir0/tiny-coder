@@ -24,7 +24,7 @@ def cjk_fraction(text: str) -> float:
 def parse_python3(code: str) -> ast.AST | None:
     try:
         return ast.parse(code)
-    except SyntaxError:
+    except (SyntaxError, RecursionError, MemoryError):
         return None
 
 
@@ -296,8 +296,11 @@ def clean_python_row(row: dict, require_fasttext: bool = True) -> tuple[dict | N
     if tree is None:
         return None, "not_python3_after_boilerplate", meta
 
-    nl_text = extract_nl(text)
-    identifier_text = extract_identifier_text(tree)
+    try:
+        nl_text = extract_nl(text)
+        identifier_text = extract_identifier_text(tree)
+    except (RecursionError, MemoryError):
+        return None, "language_signal_extract_failed", meta
     mixed_text = f"{nl_text} {identifier_text}".strip()
     if len(mixed_text) < MIN_MIXED_TEXT_CHARS:
         return None, "short_language_signal", meta
