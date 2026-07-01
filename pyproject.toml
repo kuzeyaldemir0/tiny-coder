@@ -11,5 +11,6 @@ dependencies = [
     "pandas>=2.3.3",
     "polars>=1.42.1",
     "requests>=2.34.2",
+    "tokenizers>=0.23.1",
     "torch>=2.12.1",
 ]
